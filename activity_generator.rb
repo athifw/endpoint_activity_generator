@@ -10,6 +10,8 @@ def activity_generator(command, input_array)
     create_file(input_array)
   when "modify_file"
     modify_file(input_array)
+  when "delete_file"
+    delete_file(input_array)
   end
 end
 
@@ -57,9 +59,26 @@ def modify_file(input_array)
     "username" => get_username(pid).strip,
     "filepath" => path,
     "process_name" => "touch",
-    "activity_descriptor" => "modify"
+    "activity_descriptor" => "modified"
   }
   log(modify_file_json)
+end
+
+def delete_file(input_array)
+  path = input_array[0]
+  process_command_line = "rm #{path}"
+  pid = Process.spawn process_command_line
+
+  delete_file_json = {
+    "pid" => pid,
+    "process_command_line" => process_command_line,
+    "start_time" => get_start_time(pid).strip,
+    "username" => get_username(pid).strip,
+    "filepath" => path,
+    "process_name" => "rm",
+    "activity_descriptor" => "delete"
+  }
+  log(delete_file_json)
 end
 
 def get_start_time(pid)
