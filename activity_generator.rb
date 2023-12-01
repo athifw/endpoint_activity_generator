@@ -8,6 +8,8 @@ def activity_generator(command, input_array)
     start_process(input_array)
   when "create_file"
     create_file(input_array)
+  when "modify_file"
+    modify_file(input_array)
   end
 end
 
@@ -41,6 +43,23 @@ def create_file(input_array)
     "activity_descriptor" => "create"
   }
   log(create_file_json)
+end
+
+def modify_file(input_array)
+  path = input_array[0]
+  process_command_line = "touch #{path}"
+  pid = Process.spawn process_command_line
+
+  modify_file_json = {
+    "pid" => pid,
+    "process_command_line" => process_command_line,
+    "start_time" => get_start_time(pid).strip,
+    "username" => get_username(pid).strip,
+    "filepath" => path,
+    "process_name" => "touch",
+    "activity_descriptor" => "modify"
+  }
+  log(modify_file_json)
 end
 
 def get_start_time(pid)
