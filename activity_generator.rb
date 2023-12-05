@@ -1,4 +1,5 @@
 require 'json'
+require 'etc'
 
 LOG_FILENAME = "activity_log.json"
 
@@ -7,86 +8,99 @@ def activity_generator(command, input_array)
   when "start_process"
     start_process(input_array)
   when "create_file"
-    create_file(input_array)
+    crud_file("create", input_array)
   when "modify_file"
-    modify_file(input_array)
+    crud_file("modify", input_array)
   when "delete_file"
-    delete_file(input_array)
+    crud_file("delete", input_array)
+  when "establish_connection"
+    establish_connection(input_array)
   end
 end
 
 def start_process(input_array)
   path, *args = input_array
   process_command_line = "#{path} #{args.join(' ')}"
-  pid = Process.spawn process_command_line
+
+  io = IO.popen(process_command_line)
+  pid = io.pid
+
+  io.close
 
   process_json = { 
     "pid" => pid,
     "process_command_line" => process_command_line,
-    "start_time" => get_start_time(pid).strip,
-    "username" => get_username(pid).strip,
+    "start_time" => get_start_time,
+    "username" => get_username,
     "process_name" => path
   }
   log(process_json)
 end
 
-def create_file(input_array)
+def crud_file(method, input_array)
   path = input_array[0]
-  process_command_line = "touch #{path}"
-  pid = Process.spawn process_command_line
+  cruds = {
+    "create" => ["touch", "touch"],
+    "modify" => ["echo", "echo 'Modified at #{Time.now}' >>"],
+    "delete" => ["rm", "rm"]
+  }
 
-  create_file_json = {
+  process, command_prefix = cruds[method]
+  process_command_line = "#{command_prefix} #{path}"
+
+  io = IO.popen(process_command_line)
+  pid = io.pid
+
+  io.close
+
+  file_json = {
     "pid" => pid,
     "process_command_line" => process_command_line,
-    "start_time" => get_start_time(pid).strip,
-    "username" => get_username(pid).strip,
+    "start_time" => get_start_time,
+    "username" => get_username,
     "filepath" => path,
-    "process_name" => "touch",
-    "activity_descriptor" => "create"
+    "process_name" => process,
+    "activity_descriptor" => method
   }
-  log(create_file_json)
+  log(file_json)
 end
 
-def modify_file(input_array)
-  path = input_array[0]
-  process_command_line = "touch #{path}"
-  pid = Process.spawn process_command_line
+def establish_connection(input_array)
+  url = input_array[0]
 
-  modify_file_json = {
+  process_command_line = "curl -w 'Data: %{local_ip} %{local_port} %{remote_ip} %{remote_port} %{size_request}' "\
+                         "-vX POST \"#{url}\" -d @source.json --header \"Content-Type: application/json\""
+  io = IO.popen(process_command_line)
+
+  pid = io.pid
+  output = io.read
+  io.close
+
+  local_ip, local_port, remote_ip, remote_port, request_size = output.match(/Data:\s*(.*)/)[1].split(" ")
+
+  json = {
     "pid" => pid,
     "process_command_line" => process_command_line,
-    "start_time" => get_start_time(pid).strip,
-    "username" => get_username(pid).strip,
-    "filepath" => path,
-    "process_name" => "touch",
-    "activity_descriptor" => "modified"
+    "start_time" => get_start_time,
+    "username" => get_username,
+    "local_ip" => local_ip,
+    "local_port" => local_port,
+    "remote_ip" => remote_ip,
+    "remote_port" => remote_port,
+    "request_size_in_bytes" => request_size,
+    "data_protocol" => "json",
+    "process_name" => "curl"
   }
-  log(modify_file_json)
+  log(json)
 end
 
-def delete_file(input_array)
-  path = input_array[0]
-  process_command_line = "rm #{path}"
-  pid = Process.spawn process_command_line
-
-  delete_file_json = {
-    "pid" => pid,
-    "process_command_line" => process_command_line,
-    "start_time" => get_start_time(pid).strip,
-    "username" => get_username(pid).strip,
-    "filepath" => path,
-    "process_name" => "rm",
-    "activity_descriptor" => "delete"
-  }
-  log(delete_file_json)
+def get_start_time
+  Time.now
 end
 
-def get_start_time(pid)
-  `ps -o lstart= -p #{pid}`
-end
-
-def get_username(pid)
-  `ps -o uname= -p #{pid}`
+def get_username
+  uid = Process.uid
+  Etc.getpwuid(uid).name
 end
 
 def log(json_to_add)
